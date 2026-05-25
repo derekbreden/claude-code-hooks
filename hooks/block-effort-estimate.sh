@@ -138,7 +138,7 @@ elif [[ "$classification" == "effort" ]]; then
   log_status "blocked" "$(jq -nc --arg classification "$classification" '{classification: $classification}')"
   jq -n '{
     "decision": "block",
-    "reason": "An effort estimate from you names no work that will be done. It is pattern-matched from training data, where humans wrote estimates of work they were doing — work you will not do. Rewrite the response without putting a number on how long anything will take."
+    "reason": "An effort estimate from you is not tied to reality. It is pattern-matched from training data, where humans wrote estimates of work they were doing — work you will do entirely differently. Rewrite the response without putting a number on how long anything will take."
   }'
 else
   log_status "allowed" "$(jq -nc --arg classification "$classification" '{classification: $classification}')"
