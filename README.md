@@ -36,7 +36,7 @@ These run before specific tool calls.
 
 - **`block-memory-write.sh`** — catches `Write` / `Edit` / `MultiEdit` / `NotebookEdit` calls whose target path is under any `~/.claude/projects/*/memory/` directory. The deny message asks the assistant to encode the lesson by example in the work it's doing rather than as a memory note. (`Bash` writes to memory paths via `echo >` are intentionally not blocked — the hook would otherwise gate every shell command for a threat that hasn't materialized.)
 
-- **`block-residue.sh`** — catches `Write` / `Edit` / `MultiEdit` / `NotebookEdit` calls whose new content contains residue (justification, defense, decision narrative — the author going beyond describing what is). Two-stage like the Stop hooks: regex pre-filter on the new content, Haiku adjudication on a ±600-char window around the first match. The deny message points the assistant at three calibration files (`Principle.md`, `You.md`, `Framing.md`) in `~/Developer/homesodamachine/calibration/` and asks them to read those before looking at what they wrote. Skips binary/structured files (`.dxf`, `.json`, `.yaml`, etc.) and the calibration files themselves. Fires only when the calibration files exist at the expected path; bails silently otherwise.
+- **`block-residue.sh`** — catches `Write` / `Edit` / `MultiEdit` / `NotebookEdit` calls whose new content contains residue (justification, defense, decision narrative — the author going beyond describing what is). Two-stage like the Stop hooks: regex pre-filter on the new content, Haiku adjudication on a ±600-char window around the first match. The deny message points the assistant at three calibration files (`Principle.md`, `You.md`, `Framing.md`) in `~/Developer/homesodamachine/calibration/` and asks them to read those before looking at what they wrote. **Fires once per session, not twice** — once an agent has been pointed at the calibration, subsequent residue writes in the same session pass through. A marker file at `~/.claude/hooks/state/residue-warned-<session-id>` records the warning; markers older than 7 days are garbage-collected on each invocation. Skips binary/structured files (`.dxf`, `.json`, `.yaml`, etc.) and the calibration files themselves. Fires only when the calibration files exist at the expected path; bails silently otherwise.
 
 ## How the Stop hooks work
 
@@ -58,6 +58,7 @@ The three Stop hooks and `block-residue.sh` each append one JSONL line per event
 - `loop_guard` — re-entry from a revision attempt, skipped (Stop hooks only)
 - `no_transcript` / `no_assistant_message` / `empty_or_short_text` / `empty_after_strip` — nothing to check (Stop hooks)
 - `wrong_tool` / `skipped_calibration` / `skipped_non_prose` / `empty_or_short` / `no_calibration_files` — file or tool filtered out (`block-residue.sh` only)
+- `already_warned_this_session` — session marker exists from a prior block in the same session; hook passes through (`block-residue.sh` only)
 - `regex_no_match` — pre-filter didn't match; **Stop-hook log lines include `last_400_chars` of the response so you can see what slipped through**
 - `no_api_key` — `~/.claude/anthropic_api_key` is missing
 - `haiku_no_response` — Haiku call made but empty response (timeout, network failure, etc.)

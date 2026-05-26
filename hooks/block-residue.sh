@@ -16,7 +16,12 @@ set -euo pipefail
 
 CALIBRATION_DIR="$HOME/Developer/homesodamachine/calibration"
 LOG_FILE="$HOME/.claude/hooks/logs/residue.jsonl"
-mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+WARNED_DIR="$HOME/.claude/hooks/state"
+mkdir -p "$(dirname "$LOG_FILE")" "$WARNED_DIR" 2>/dev/null || true
+
+# Garbage-collect stale per-session warned markers (older than 7 days). The
+# markers are empty files, but the directory shouldn't grow without bound.
+find "$WARNED_DIR" -type f -name 'residue-warned-*' -mtime +7 -delete 2>/dev/null || true
 
 log_status() {
   local status="$1"
@@ -41,6 +46,25 @@ fi
 input=$(cat)
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')
+
+# Per-session loop guard. The hook bothers an agent once per session; after
+# that the marker file is in place and subsequent residue writes pass
+# through. Session is identified by the transcript path basename (the
+# session UUID), falling back to a session_id field if that's not present.
+transcript_path=$(printf '%s' "$input" | jq -r '.transcript_path // empty')
+session_id_field=$(printf '%s' "$input" | jq -r '.session_id // empty')
+if [[ -n "$transcript_path" ]]; then
+  session_marker=$(basename "$transcript_path" .jsonl)
+elif [[ -n "$session_id_field" ]]; then
+  session_marker="$session_id_field"
+else
+  session_marker=""
+fi
+
+if [[ -n "$session_marker" && -f "$WARNED_DIR/residue-warned-$session_marker" ]]; then
+  log_status "already_warned_this_session" "$(jq -nc --arg sid "$session_marker" '{session: $sid}')"
+  exit 0
+fi
 
 # Extract the content being written/edited.
 #   Write       -> tool_input.content
@@ -109,7 +133,7 @@ fi
 # The pattern is intentionally lenient — false positives are cheap (one Haiku
 # call) but false negatives are silent slips. Extend when the log shows
 # something getting past.
-pattern='([Pp]reviously|[Oo]riginally|[Uu]sed[ \-]+to[ \-]+(be|use|have|do|exist)|[Ss]witched[ \-]+from|[Cc]hanged[ \-]+from|[Mm]oved[ \-]+away[ \-]+from|[Nn]o[ \-]+longer|[Ww]e[ \-]+(chose|considered|rejected|decided)|[Tt]he[ \-]+rationale|[Rr]ather[ \-]+than[ \-]+(using|having|going[ \-]+with|choosing|doing|the|an?[ ][a-zA-Z])|[Ii]nstead[ \-]+of[ \-]+(using|having|going[ \-]+with|choosing|the|an?[ ][a-zA-Z])|[Aa]lternatives?[ \-]+(considered|ruled[ \-]+out|rejected)|[Dd]esigns?[ \-]+(considered|ruled[ \-]+out|rejected)|[Tt]rade[ \-]?offs?|[Nn]ot[ \-]+a[ \-]+(compromise|substitute)|[Bb]ecause[ \-]+the[ \-]+alternative|[Tt]he[ \-]+reasoning[ \-]+behind|[Tt]he[ \-]+(reason|reasons)[ \-]+(is|are|why|for))'
+pattern='([Pp]reviously|[Oo]riginally|[Uu]sed[ \-]+to[ \-]+(be|use|have|do|exist)|[Ss]witched[ \-]+from|[Cc]hanged[ \-]+from|[Mm]oved[ \-]+away[ \-]+from|[Nn]o[ \-]+longer|[Ww]e[ \-]+(chose|considered|rejected|decided)|[Tt]he[ \-]+rationale|[Rr]ather[ \-]+than[ \-]+(using|having|going[ \-]+with|choosing|doing|the|a|an)|[Ii]nstead[ \-]+of[ \-]+(using|having|going[ \-]+with|choosing|the|a|an)|[Aa]lternatives?[ \-]+(considered|ruled[ \-]+out|rejected)|[Dd]esigns?[ \-]+(considered|ruled[ \-]+out|rejected)|[Tt]rade[ \-]?offs?|[Nn]ot[ \-]+a[ \-]+(compromise|substitute)|[Bb]ecause[ \-]+the[ \-]+alternative|[Tt]he[ \-]+reasoning[ \-]+behind|[Tt]he[ \-]+(reason|reasons)[ \-]+(is|are|why|for))'
 
 if ! printf '%s\n' "$new_content" | grep -qE "$pattern"; then
   log_status "regex_no_match" "$(jq -nc --argjson len "${#new_content}" '{len: $len}')"
@@ -180,12 +204,18 @@ classification=$(printf '%s' "$response" | jq -r '.content[0].text // empty' | t
 if [[ -z "$classification" ]]; then
   log_status "haiku_no_response"
 elif [[ "$classification" == "residue" ]]; then
-  log_status "blocked" "$(jq -nc --arg classification "$classification" --arg file "$file_path" '{classification: $classification, file: $file}')"
+  # Mark this session as warned. Subsequent residue writes in the same
+  # session will pass through — the agent has the calibration context now
+  # and the decision is theirs.
+  if [[ -n "$session_marker" ]]; then
+    touch "$WARNED_DIR/residue-warned-$session_marker" 2>/dev/null || true
+  fi
+  log_status "blocked" "$(jq -nc --arg classification "$classification" --arg file "$file_path" --arg session "$session_marker" '{classification: $classification, file: $file, session: $session}')"
   jq -n '{
     "hookSpecificOutput": {
       "hookEventName": "PreToolUse",
       "permissionDecision": "deny",
-      "permissionDecisionReason": "Before continuing, read /Users/derekbredensteiner/Developer/homesodamachine/calibration/Principle.md and the conversations it points at (You.md and Framing.md, in the same directory). What you were about to write was caught as residue. Read those files first, then look at what you wrote."
+      "permissionDecisionReason": "Before continuing, read /Users/derekbredensteiner/Developer/homesodamachine/calibration/Principle.md and the conversations it points at (You.md and Framing.md, in the same directory). What you were about to write was caught as residue. Read those files first, then look at what you wrote. If after reading you still want to write what you had, retry — this hook bothers you once per session, not twice."
     }
   }'
 else
