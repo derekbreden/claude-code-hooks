@@ -132,10 +132,12 @@ fi
 #     considered / ruled out / rejected, trade-off, not a compromise / substitute,
 #     because the alternative, specifically so, would otherwise
 #   - claim of rightness: is the right / correct X
+#   - provisional status: superseded, rough/early/placeholder estimate, for
+#     now, TBD, to be / not yet (decided|determined|measured|...), open item
 # The pattern is intentionally lenient — false positives are cheap (one Haiku
 # call) but false negatives are silent slips. Extend when the log shows
 # something getting past.
-pattern='([Pp]reviously|[Oo]riginally|[Uu]sed[ \-]+to[ \-]+(be|use|have|do|exist)|[Ss]witched[ \-]+from|[Cc]hanged[ \-]+from|[Mm]oved[ \-]+away[ \-]+from|[Nn]o[ \-]+longer|[Ww]e[ \-]+(chose|considered|rejected|decided)|[Tt]he[ \-]+rationale|[Rr]ather[ \-]+than[ \-]+(using|having|going[ \-]+with|choosing|doing|the|a|an)|[Ii]nstead[ \-]+of[ \-]+(using|having|going[ \-]+with|choosing|the|a|an)|[Aa]lternatives?[ \-]+(considered|ruled[ \-]+out|rejected)|[Dd]esigns?[ \-]+(considered|ruled[ \-]+out|rejected)|[Tt]rade[ \-]?offs?|[Nn]ot[ \-]+a[ \-]+(compromise|substitute)|[Bb]ecause[ \-]+the[ \-]+alternative|[Tt]he[ \-]+reasoning[ \-]+behind|[Tt]he[ \-]+(reason|reasons)[ \-]+(is|are|why|for)|[Cc]hosen[ \-]+because|[Ss]elected[ \-]+because|[Pp]icked[ \-]+because|[Ii]ntentionally[ \-]+[[:alpha:]]+|[Dd]eliberately[ \-]+[[:alpha:]]+|[Ss]pecifically[ \-]+so[ \-]+[[:alpha:]]|[Ii]s[ \-]+the[ \-]+(right|correct)[ \-]+[[:alpha:]]|[Ww]ould[ \-]+otherwise)'
+pattern='([Pp]reviously|[Oo]riginally|[Uu]sed[ \-]+to[ \-]+(be|use|have|do|exist)|[Ss]witched[ \-]+from|[Cc]hanged[ \-]+from|[Mm]oved[ \-]+away[ \-]+from|[Nn]o[ \-]+longer|[Ww]e[ \-]+(chose|considered|rejected|decided)|[Tt]he[ \-]+rationale|[Rr]ather[ \-]+than[ \-]+(using|having|going[ \-]+with|choosing|doing|the|a|an)|[Ii]nstead[ \-]+of[ \-]+(using|having|going[ \-]+with|choosing|the|a|an)|[Aa]lternatives?[ \-]+(considered|ruled[ \-]+out|rejected)|[Dd]esigns?[ \-]+(considered|ruled[ \-]+out|rejected)|[Tt]rade[ \-]?offs?|[Nn]ot[ \-]+a[ \-]+(compromise|substitute)|[Bb]ecause[ \-]+the[ \-]+alternative|[Tt]he[ \-]+reasoning[ \-]+behind|[Tt]he[ \-]+(reason|reasons)[ \-]+(is|are|why|for)|[Cc]hosen[ \-]+because|[Ss]elected[ \-]+because|[Pp]icked[ \-]+because|[Ii]ntentionally[ \-]+[[:alpha:]]+|[Dd]eliberately[ \-]+[[:alpha:]]+|[Ss]pecifically[ \-]+so[ \-]+[[:alpha:]]|[Ii]s[ \-]+the[ \-]+(right|correct)[ \-]+[[:alpha:]]|[Ww]ould[ \-]+otherwise|[Ss]uperseded|([Rr]ough|[Ee]arly|[Ii]nitial|[Pp]reliminary|[Bb]allpark|[Ff]irst[ \-]?pass)[ \-]+estimate|[Pp]laceholder|[Ff]or[ \-]+now|[Tt][Bb][Dd]|[Tt]o[ \-]+be[ \-]+(decided|determined|measured|defined|specified|chosen|settled|added|sized|finalized)|[Nn]ot[ \-]+yet[ \-]+(decided|determined|measured|defined|specified|chosen|settled|finalized)|[Oo]pen[ \-]+(item|items|question|design))'
 
 if ! printf '%s\n' "$new_content" | grep -qE "$pattern"; then
   log_status "regex_no_match" "$(jq -nc --argjson len "${#new_content}" '{len: $len}')"
@@ -166,12 +168,14 @@ api_key=$(cat "$api_key_file")
 
 classification_prompt='You will see a snippet from a file an AI assistant is about to write or edit. Classify whether the snippet contains RESIDUE — the author going beyond describing what currently is, to explain, defend, justify, or narrate.
 
-- residue = explains WHY something is the way it is by reference to alternatives that were rejected, decisions that were made, or how it came to be. Goes beyond present-tense description into justification, defense, or history. Examples:
+- residue = explains WHY something is the way it is by reference to alternatives that were rejected, decisions that were made, or how it came to be; OR flags a value or decision as provisional — superseded, a placeholder or rough/early estimate, TBD, not yet decided, an open item, or temporary ("for now"). Goes beyond present-tense description into justification, defense, history, or provisional status. Examples:
   - "We chose to ship the umbilical pre-assembled rather than separately because customers would otherwise have to thread tubes through the shank"
   - "Designs ruled out: split halves, living hinge, C-clip, tab-and-slot"
   - "Previously the plate was solid; switching to open channels lets the customer slide it on"
   - "This is not a compromise — it is the same product as a can"
   - "The rationale is that the customer needs to install one-handed"
+  - "Quoted $9/part (rough early estimate, superseded by the $27.83 quote below)"
+  - "Final dimensions TBD pending measurement; placeholder envelope to be decided once the donor is measured"
 
 - describing = states facts, motion, or geometry without defending or justifying. Words like "rather than", "previously", or "originally" can appear here without being residue if they describe what is, not defend a choice. Examples:
   - "The rim arc extends counterclockwise rather than clockwise"
