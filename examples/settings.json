@@ -17,6 +17,15 @@
             "command": "$HOME/.claude/hooks/block-underived-measurement.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/block-branch.sh"
+          }
+        ]
       }
     ],
     "Stop": [
