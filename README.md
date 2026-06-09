@@ -1,6 +1,6 @@
 # claude-code-hooks
 
-Claude Code hooks. Three Stop hooks block specific outputs from the assistant: effort estimates, hedges that don't name a concern, disagreement framed as a question. Three PreToolUse hooks block specific writes: project memory files, content containing residue (justification, defense, decision narrative — the author going beyond describing what is), and underived measurements (bare dimensional literals that should be docgen markers fed from a source constant). A fourth PreToolUse hook runs on `Bash` and blocks branch creation, so work stays on `main` in the one shared worktree.
+Claude Code hooks. Three Stop hooks block specific outputs from the assistant: effort estimates, hedges that don't name a concern, disagreement framed as a question. Three PreToolUse hooks block specific writes: project memory files, content containing residue (justification, defense, decision narrative — the author going beyond describing what is), and underived measurements (bare dimensional literals that should be docgen markers fed from a source constant). A fourth PreToolUse hook runs on `Bash` and blocks branch creation, so work stays on `main` in the one shared worktree. A fifth runs on `WebFetch` and denies the first call of each session with a redirect to Chrome MCP, which is far more reliable.
 
 This is a personal tool, put on GitHub in case it helps someone running similar configurations. It is not a polished, configurable, cross-platform library — read the next section before assuming it'll work for you.
 
@@ -42,6 +42,8 @@ These run before specific tool calls.
 
 - **`block-branch.sh`** — catches `Bash` calls whose command creates or publishes a git branch: `git checkout -b`/`-B`, `git switch -c`/`-C`, `git branch <newname>`, `git worktree add`, `gh pr create`, and `git push -u`/`--set-upstream` to a non-`main` branch. Work happens directly on `main` in the one shared worktree, where simultaneous agents surface conflicts in real time; a branch gives no isolation there and just hides work from the other agents on the same checkout. Listing/deleting/renaming branches (`git branch`, `-d`/`-D`, `-m`) and pushing `main` pass through. Hard deny on every match — no Haiku stage, no per-session passthrough; the deny message states the convention.
 
+- **`block-webfetch.sh`** — catches `WebFetch` calls and denies the first one of each session with a message redirecting to Chrome MCP, which is far more reliable (no cert failures, stale page caches, or stale search results). **Fires once per session, not twice** — after the nudge, subsequent `WebFetch` calls in the same session pass through, so a session where Chrome MCP genuinely isn't connected can still fall back. A marker file at `~/.claude/hooks/state/webfetch-warned-<session-id>` records the warning; markers older than 7 days are garbage-collected on each invocation. No Haiku stage and no logging — `WebFetch` is unambiguous, nothing to adjudicate.
+
 ## How the Stop hooks work
 
 Each Stop hook follows the same shape:
@@ -78,7 +80,7 @@ grep regex_no_match ~/.claude/hooks/logs/effort-estimate.jsonl | tail
 
 Identify the shape that got past, add it to the regex pattern in the script.
 
-`block-memory-write.sh` does not log. It is structurally much simpler (path comparison only) and has no two-stage decision to diagnose.
+`block-memory-write.sh` and `block-webfetch.sh` do not log. They are structurally much simpler (a path comparison and a tool-name match, respectively) and have no two-stage decision to diagnose.
 
 ## Installing
 
@@ -106,4 +108,5 @@ The `reason` message — what the assistant sees when blocked — is a `jq -n` l
 - `hooks/block-residue.sh` — residue hook (PreToolUse, regex + Haiku two-stage)
 - `hooks/block-underived-measurement.sh` — underived-measurement hook (PreToolUse, regex + Haiku two-stage)
 - `hooks/block-branch.sh` — branch-creation hook (PreToolUse on Bash, command-pattern match)
-- `examples/settings.json` — example `~/.claude/settings.json` snippet wiring all seven hooks
+- `hooks/block-webfetch.sh` — WebFetch-redirect hook (PreToolUse on WebFetch, once-per-session nudge to Chrome MCP)
+- `examples/settings.json` — example `~/.claude/settings.json` snippet wiring all eight hooks

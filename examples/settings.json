@@ -26,6 +26,15 @@
             "command": "$HOME/.claude/hooks/block-branch.sh"
           }
         ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/block-webfetch.sh"
+          }
+        ]
       }
     ],
     "Stop": [
