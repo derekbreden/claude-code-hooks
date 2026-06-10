@@ -71,7 +71,7 @@ fi
 # The pattern is intentionally lenient — false positives are cheap (one Haiku
 # call) but false negatives are silent slips. Extend it when the log shows
 # something getting past.
-pattern='([Hh]alf[ \-]+(a[ ]+)?day|[Aa]n?[ ]+(afternoon|evening|morning|hour|day|week|month|year)s?|[Aa][ ]+few[ ]+(hours?|days?|weeks?|months?)|[Aa][ ]+couple[ ]+(of[ ]+)?(hours?|days?|weeks?|months?|years?)|(one|two|three|four|five|six|seven|eight|nine|ten)[ ]+(hours?|days?|weeks?|months?|years?)|~?[0-9]+[ ]*-?[ ]*(minutes?|hours?|days?|weeks?|months?|years?)|weeks?[ ]+(,[ ]+)?not[ ]+months?|months?[ ]+(,[ ]+)?not[ ]+weeks?|time-to-[a-z]+|(should|would|will|might)[ ]+take|takes?[ ]+(about|roughly|a)|multi-year|several[ ]+(years?|months?|weeks?))'
+pattern='([Hh]alf[ \-]+(an?[ ]+)?(hour|day|week|month)|[Aa]n?[ ]+(afternoon|evening|morning|hour|day|week|month|year)s?|[Aa][ ]+few[ ]+(minutes?|hours?|days?|weeks?|months?)|[Aa][ ]+couple[ ]+(of[ ]+)?(minutes?|hours?|days?|weeks?|months?|years?)|(one|two|three|four|five|six|seven|eight|nine|ten)[ ]+(minutes?|hours?|days?|weeks?|months?|years?)|~?[0-9]+[ ]*-?[ ]*(min(ute)?s?|hours?|hrs?|days?|weeks?|wks?|months?|years?|yrs?)|(minutes?|hours?|days?|weeks?|months?|years?)[ \-]*ish|weeks?[ ]+(,[ ]+)?not[ ]+months?|months?[ ]+(,[ ]+)?not[ ]+weeks?|time-to-[a-z]+|(should|would|will|might)[ ]+take|takes?[ ]+(about|roughly|a)|multi-year|several[ ]+(years?|months?|weeks?))'
 
 if ! printf '%s\n' "$last_text" | grep -qE "$pattern"; then
   # Log the last 400 chars of the response so a future "why didn't this fire?"
