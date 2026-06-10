@@ -1,6 +1,6 @@
 # claude-code-hooks
 
-Claude Code hooks. Three Stop hooks block specific outputs from the assistant: effort estimates, hedges that don't name a concern, disagreement framed as a question. Three PreToolUse hooks block specific writes: project memory files, content containing residue (justification, defense, decision narrative — the author going beyond describing what is), and underived measurements (bare dimensional literals that should be docgen markers fed from a source constant). A fourth PreToolUse hook runs on `Bash` and blocks branch creation, so work stays on `main` in the one shared worktree. A fifth runs on `WebFetch` and `WebSearch` and denies the first call of each (per tool, per session) with a redirect to Chrome MCP, which is far more reliable.
+Claude Code hooks. Three Stop hooks block specific outputs from the assistant: effort estimates, hedges that don't name a concern, disagreement framed as a question. Three PreToolUse hooks block specific writes: project memory files, content containing residue (justification, defense, decision narrative — the author going beyond describing what is), and underived measurements (bare dimensional literals that should be docgen markers fed from a source constant). A fourth PreToolUse hook runs on `Bash` and blocks branch creation, so work stays on `main` in the one shared worktree. A fifth runs on `WebFetch` and `WebSearch` and denies the first call of each (per tool, per session) with a redirect to Chrome MCP, which is far more reliable. One UserPromptSubmit hook injects context instead of blocking: when a prompt carries step-viewer pick text, it points the agent (once per session) at the format's home and at the fact the channel is two-way.
 
 This is a personal tool, put on GitHub in case it helps someone running similar configurations. It is not a polished, configurable, cross-platform library — read the next section before assuming it'll work for you.
 
@@ -44,6 +44,10 @@ These run before specific tool calls.
 
 - **`block-web.sh`** — catches `WebFetch` and `WebSearch` calls and denies the first of each per session with a message redirecting to Chrome MCP, which is far more reliable: WebFetch hits cert failures and stale page caches Chrome doesn't, and WebSearch is not Google (its results are weak). **Fires once per session per tool, not twice** — after the nudge, subsequent calls of that tool in the same session pass through, so a session where Chrome MCP genuinely isn't connected can still fall back. Marker files at `~/.claude/hooks/state/webfetch-warned-<session-id>` / `websearch-warned-<session-id>` record the warning; markers older than 7 days are garbage-collected on each invocation. No Haiku stage and no logging — the tool name is unambiguous, nothing to adjudicate.
 
+### UserPromptSubmit hooks
+
+- **`note-pick-text.sh`** — catches user prompts carrying step-viewer pick text (the STEP viewer's copy blobs: `file:`/`solid:`/`edge:`/`faceA:`/`faceB:`/`click:` lines, recognized by their three-decimal coordinate triples) and injects `additionalContext` instead of blocking anything. The note points the agent at the format's home (`web/public/js/viewer/pick-format.js`, with verbatim samples in `web/tests/pick-format.test.js`), asks it to echo its decoded identification of each pick before changing geometry, and tells it the part nothing in a pasted blob reveals: the channel is two-way — the viewer's Find box accepts the same format pasted back, opens the `file:` line's file, and highlights every pick, so the agent should emit pick lines when pointing the user at geometry. **Fires once per session, not twice**, via `~/.claude/hooks/state/pick-noted-<session-id>` (same 7-day GC). Applies only inside a repo that carries the viewer (found by walking up from cwd); bails silently anywhere else. No Haiku stage and no logging — the coordinate-triple signature is unambiguous, nothing to adjudicate.
+
 ## How the Stop hooks work
 
 Each Stop hook follows the same shape:
@@ -80,7 +84,7 @@ grep regex_no_match ~/.claude/hooks/logs/effort-estimate.jsonl | tail
 
 Identify the shape that got past, add it to the regex pattern in the script.
 
-`block-memory-write.sh` and `block-web.sh` do not log. They are structurally much simpler (a path comparison and a tool-name match, respectively) and have no two-stage decision to diagnose.
+`block-memory-write.sh`, `block-web.sh`, and `note-pick-text.sh` do not log. They are structurally much simpler (a path comparison and a tool-name match, respectively) and have no two-stage decision to diagnose.
 
 ## Installing
 
@@ -109,4 +113,5 @@ The `reason` message — what the assistant sees when blocked — is a `jq -n` l
 - `hooks/block-underived-measurement.sh` — underived-measurement hook (PreToolUse, regex + Haiku two-stage)
 - `hooks/block-branch.sh` — branch-creation hook (PreToolUse on Bash, command-pattern match)
 - `hooks/block-web.sh` — web-tool-redirect hook (PreToolUse on WebFetch|WebSearch, once-per-session-per-tool nudge to Chrome MCP)
-- `examples/settings.json` — example `~/.claude/settings.json` snippet wiring all eight hooks
+- `hooks/note-pick-text.sh` — step-viewer pick-text note (UserPromptSubmit, once-per-session context injection)
+- `examples/settings.json` — example `~/.claude/settings.json` snippet wiring all nine hooks
