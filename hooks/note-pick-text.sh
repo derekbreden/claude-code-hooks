@@ -63,7 +63,7 @@ fi
 read -r -d '' note <<'EOF' || true
 The coordinate lines in this prompt are step-viewer pick text: the user clicked geometry in the repo's STEP viewer and pasted the copy blob (file/solid/edge/faceA/faceB/click lines). The format, parser, and matcher live in web/public/js/viewer/pick-format.js; web/tests/pick-format.test.js carries verbatim samples. Decode each pick against the generating CAD script and echo your identification of the feature ("that's the pill-bore ceiling flat") before changing geometry — misfires are intent gaps, not decode errors, and the echo catches them in conversation instead of in a commit.
 
-The channel is two-way: the viewer's Find box (a toggle on any open STEP) accepts this same format pasted back — it opens the file named by a file: line, highlights every recognizable pick, and frames the camera on them. When pointing the user at geometry you built or changed, emit pick lines in a fenced code block for them to paste there.
+The channel is two-way: the viewer's Find box (a toggle on any open STEP) accepts this same format pasted back — it opens the file named by a file: line, highlights every recognizable pick, and frames the camera on them. When pointing the user at geometry you built or changed, compose lines from CadQuery geometry with hardware/scripts/pick_text.py (from_edge / from_face / click / file_line — the module explains itself and is round-trip tested against the viewer's parser) and emit them in a fenced code block for the user to paste.
 EOF
 
 jq -n --arg ctx "$note" '{
