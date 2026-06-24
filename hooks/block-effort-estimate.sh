@@ -96,6 +96,33 @@ window=$(printf '%s' "$last_text" | awk -v pat="$pattern" '
   }
 ')
 
+# Highlight: the exact span the regex matched, widened outward to whole
+# whitespace-delimited tokens plus a little context, then handed to Haiku as
+# "here is the text that triggered this check." This points the classifier at
+# the trigger-in-situ — e.g. the bare match "28 min" surfaces as the token it
+# actually lives in, "DIP-28 mini.tsx" — so a misfire buried in a long window
+# is easy to recognize as a non-duration. The widening is deliberate: a bare
+# fragment shown in isolation reads like a real time and biases the classifier
+# the wrong way, so the span always carries its surrounding words. Empty (and
+# the prompt falls back to no highlight) if extraction fails or the span runs
+# long, which keeps the call byte-identical to the un-highlighted path.
+highlight=$(printf '%s' "$last_text" | awk -v pat="$pattern" '
+  { full = full $0 "\n" }
+  END {
+    if (match(full, pat)) {
+      pad = 12
+      s = RSTART - pad; if (s < 1) s = 1
+      e = RSTART + RLENGTH + pad; if (e > length(full)) e = length(full)
+      while (s > 1 && substr(full, s-1, 1) !~ /[ \t\r\n]/) s--
+      while (e < length(full) && substr(full, e+1, 1) !~ /[ \t\r\n]/) e++
+      span = substr(full, s, e - s + 1)
+      gsub(/[ \t\r\n]+/, " ", span)
+      sub(/^ +/, "", span); sub(/ +$/, "", span)
+      if (length(span) <= 90) print span
+    }
+  }
+')
+
 api_key_file="$HOME/.claude/anthropic_api_key"
 if [[ ! -f "$api_key_file" ]]; then
   log_status "no_api_key"
@@ -103,25 +130,34 @@ if [[ ! -f "$api_key_file" ]]; then
 fi
 api_key=$(cat "$api_key_file")
 
-classification_prompt='A cheap regex flagged a possible time/effort estimate in the snippet below. The regex is deliberately lenient and frequently misfires on things that are not durations at all — part numbers ("DIP-28"), filenames ("mini.tsx"), version numbers, quantities, dimensions ("2.54mm"). Decide which of THREE cases applies.
+# Instructions + the three-way definitions. The highlight line (if any) and the
+# reply instruction are appended in the jq body assembly below.
+classification_defs='A cheap regex flagged a possible time/effort estimate in the snippet below. The regex is deliberately lenient and frequently misfires on things that are not durations at all — part numbers ("DIP-28"), filenames ("mini.tsx"), version numbers, quantities, dimensions ("2.54mm"). Decide which of THREE cases applies.
 
 - effort = the text estimates how long someone (especially the assistant itself) will spend doing work. Examples: "this will take a few hours", "half a day of work", "weeks not months", "~4 hours", "maybe a half-day of careful work", "multi-year project".
 - projection = the text describes outcomes, properties, regulatory cadences, or durations of states (NOT work effort). Examples: "guaranteed multi-year loss", "bottle goes flat overnight", "tank lasts months", "for as long as the service operates", "every 5 years on 3AL aluminum", "happily for a year".
-- none = there is no actual time estimate in the snippet; the regex misfired on text that is not a duration at all.
+- none = there is no actual time estimate in the snippet; the regex misfired on text that is not a duration at all.'
 
-Reply with exactly one word: effort, projection, or none.
-
-Snippet:
-'
+if [[ -n "$highlight" ]]; then
+  hl_line=$(printf 'The exact text the regex flagged is: "%s". Read it in its surrounding context in the snippet before deciding.' "$highlight")
+else
+  hl_line=""
+fi
 
 body=$(jq -n \
   --arg model "claude-haiku-4-5" \
-  --arg prompt "$classification_prompt" \
+  --arg defs "$classification_defs" \
+  --arg hl "$hl_line" \
   --arg msg "$window" \
   '{
     model: $model,
     max_tokens: 5,
-    messages: [{role: "user", content: ($prompt + $msg)}]
+    messages: [{role: "user", content: (
+      $defs + "\n\n"
+      + (if $hl == "" then "" else $hl + "\n\n" end)
+      + "Reply with exactly one word: effort, projection, or none.\n\nSnippet:\n"
+      + $msg
+    )}]
   }')
 
 response=$(curl -sS https://api.anthropic.com/v1/messages \
@@ -136,11 +172,11 @@ classification=$(printf '%s' "$response" | jq -r '.content[0].text // empty' | t
 if [[ -z "$classification" ]]; then
   log_status "haiku_no_response"
 elif [[ "$classification" == "effort" ]]; then
-  log_status "blocked" "$(jq -nc --arg classification "$classification" '{classification: $classification}')"
+  log_status "blocked" "$(jq -nc --arg classification "$classification" --arg highlight "$highlight" '{classification: $classification, highlight: $highlight}')"
   jq -n '{
     "decision": "block",
     "reason": "An effort estimate from you is not tied to reality. It is pattern-matched from training data, where humans wrote estimates of work they were doing — work you will do entirely differently. Rewrite the response without putting a number on how long anything will take."
   }'
 else
-  log_status "allowed" "$(jq -nc --arg classification "$classification" '{classification: $classification}')"
+  log_status "allowed" "$(jq -nc --arg classification "$classification" --arg highlight "$highlight" '{classification: $classification, highlight: $highlight}')"
 fi
